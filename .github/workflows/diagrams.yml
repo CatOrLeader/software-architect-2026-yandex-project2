@@ -30,11 +30,7 @@ jobs:
           --workdir /workspace \
           plantuml/plantuml:1.2026.4@sha256:e0f6fb9cb28defdbcd63320c61d0e98f6cf3302039f881278db8a9cb74c6fed2 \
           -tpng \
-          diagrams/context/*.puml \
-          diagrams/container/*.puml \
-          diagrams/component/*.puml \
-          diagrams/code/*.puml \
-          diagrams/er/*.puml
+          diagrams/container/*.puml
 
     - name: Commit Diagrams
       if: github.event_name == 'push' && github.ref_name == 'main'
