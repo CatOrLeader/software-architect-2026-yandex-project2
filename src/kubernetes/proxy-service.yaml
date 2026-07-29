@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy-service
+  namespace: cinemaabyss
+  labels:
+    app: proxy-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: proxy-service
+    spec:
+      containers:
+      - name: proxy-service
+        image: ghcr.io/catorleader/software-architect-2026-yandex-project2/proxy-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+        env:
+        - name: PORT
+          value: "8000"
+        envFrom:
+        - configMapRef:
+            name: cinemaabyss-config
+        resources:
+          limits:
+            cpu: "300m"
+            memory: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          timeoutSeconds: 3
+      imagePullSecrets:
+      - name: dockerconfigjson
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-service
+  namespace: cinemaabyss
+  labels:
+    app: proxy-service
+spec:
+  selector:
+    app: proxy-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  - name: http-direct
+    port: 8000
+    targetPort: http
+  type: ClusterIP

@@ -25,7 +25,38 @@ spec:
     spec:
       containers:
       - name: proxy-service
-        ..... тут
+        image: {{ .Values.proxyService.image.repository }}:{{ .Values.proxyService.image.tag }}
+        imagePullPolicy: {{ .Values.proxyService.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.proxyService.service.targetPort }}
+        env:
+        - name: PORT
+          value: {{ .Values.proxyService.service.targetPort | quote }}
+        envFrom:
+        - configMapRef:
+            name: cinemaabyss-config
+        resources:
+          {{- toYaml .Values.proxyService.resources | nindent 10 }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          timeoutSeconds: 3
+      {{- if .Values.imagePullSecrets.name }}
+      imagePullSecrets:
+      - name: {{ .Values.imagePullSecrets.name }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -38,5 +69,13 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   selector:
-    ... и тут
+    app: proxy-service
+  ports:
+  - name: http
+    port: {{ .Values.proxyService.service.port }}
+    targetPort: http
+  - name: http-direct
+    port: {{ .Values.proxyService.service.directPort }}
+    targetPort: http
+  type: {{ .Values.proxyService.service.type }}
 {{- end }}

@@ -1,0 +1,91 @@
+@startuml
+
+title Контейнерная диаграмма «Кинобездна» — горизонт двух месяцев
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+!define DEVICONS https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define FONTAWESOME https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/font-awesome-5
+
+!include DEVICONS/go.puml
+!include DEVICONS/postgresql.puml
+!include DEVICONS/react.puml
+!include FONTAWESOME/users.puml
+
+LAYOUT_TOP_DOWN()
+skinparam linetype ortho
+skinparam nodesep 65
+skinparam ranksep 55
+skinparam ArrowFontSize 8
+
+Person(customer, "Пользователь", "Смотрит фильмы, оценивает их, управляет избранным и подпиской")
+System_Ext(recommendationSystem, "Сторонняя рекомендательная система", "Асинхронно формирует персональные подборки")
+
+System_Boundary(cinemaAbyss, "Система «Кинобездна»") {
+    Boundary(userInterfaces, "Пользовательские интерфейсы") {
+        Container(webFrontend, "Браузер", "React / Web", "Браузерный Web-интерфейс", $tags="frontend", $sprite="react")
+        Container(mobileFrontend, "Мобильное приложение", "Mobile Web / приложение", "Компактный интерфейс и сокращённые представления", $tags="frontend")
+        Container(tvFrontend, "Smart TV", "Smart TV Web-приложение", "Интерфейс большого экрана с управлением пультом", $tags="frontend")
+
+        Boundary(microfrontends, "Композиция микрофронтендов") {
+            Container(frontendShell, "Frontend Shell", "React", "Подключает микрофронтенды и выбирает клиентский контракт BFF", $tags="frontend", $sprite="react")
+            Container(catalogMf, "Каталог фильмов", "React", "UI Микросервиса фильмов", $tags="frontend", $sprite="react")
+            Container(legacyMf, "Legacy фронтенд", "Существующий frontend", "UI всех функций, ещё остающихся в монолите", $tags="legacy")
+        }
+    }
+
+    Boundary(runtime, "Kubernetes приложения Кинобездна") {
+        Container(ingress, "Ingress Controller", "Kubernetes Ingress", "Единый edge: TLS и маршрутизация UI/API", $tags="platform")
+        Container(bff, "BFF", "Go / REST", "Один контейнер с отдельными контрактами /web, /mobile и /tv; адаптирует состав и объём данных", $tags="backend")
+        Container(apiGateway, "API Gateway / Strangler Proxy", "Go / REST", "Единая точка вызова сервисов; по feature flag переключает API метаданных между монолитом и микросервисом", $tags="platform")
+
+        Boundary(extractedMetadata, "Домен метаданных") {
+            Container(moviesService, "Сервис Movies", "Go", "Владеет метаданными фильмов; ACL защищает новую модель от legacy-контрактов", $tags="backend")
+            ContainerDb(moviesDb, "БД метаданных", "PostgreSQL", "Метаданные фильмов, вынесенные в отдельную БД", $tags="data", $sprite="postgresql")
+        }
+
+        Boundary(legacy, "Legacy System") {
+            Container(monolith, "Монолит", "Go", "Пользователи, видео, платежи, подписки, скидки, пользовательские оценки и избранное", $tags="legacy")
+            ContainerDb(monolithDb, "БД монолита", "PostgreSQL", "Данные всех ещё не выделенных доменов; метаданные удаляются после переключения", $tags="legacy", $sprite="postgresql")
+        }
+
+        Boundary(eventsMvp, "Kafka MVP") {
+            Container(eventsService, "Сервис Events", "Go / REST", "По API создаёт события User, Payment и Movie", $tags="backend")
+            ContainerQueue(eventBus, "Kafka", "Apache Kafka", "Хранит и доставляет тестовые MVP-события", $tags="platform")
+        }
+    }
+}
+
+Lay_R(tvFrontend, webFrontend)
+Lay_R(webFrontend, mobileFrontend)
+Lay_D(webFrontend, frontendShell)
+Lay_R(catalogMf, legacyMf)
+Lay_R(monolith, moviesService)
+Lay_R(moviesService, eventsService)
+
+Rel_D(customer, webFrontend, "Использует")
+Rel_D(customer, mobileFrontend, "Использует")
+Rel_D(customer, tvFrontend, "Использует")
+
+Rel_D(webFrontend, frontendShell, "Открывает web-версию")
+Rel_D(mobileFrontend, frontendShell, "Открывает mobile-версию")
+Rel_D(tvFrontend, frontendShell, "Открывает TV-версию")
+Rel_D(frontendShell, catalogMf, "Подключает")
+Rel_D(frontendShell, legacyMf, "Подключает")
+
+Rel_R(frontendShell, ingress, "Клиентский API", "HTTPS")
+Rel_D(ingress, bff, "/web, /mobile, /tv", "REST")
+Rel(ingress, apiGateway, "Тестовый /api/events", "REST")
+Rel_D(bff, apiGateway, "Backend API", "REST")
+
+Rel_D(apiGateway, moviesService, "Метаданные", "REST")
+Rel_D(apiGateway, monolith, "Legacy API", "REST")
+Rel_D(apiGateway, eventsService, "Events API", "REST")
+
+Rel_D(moviesService, moviesDb, "Данные", "SQL")
+Rel_D(monolith, monolithDb, "Данные", "SQL")
+
+BiRel(eventsService, eventBus, "MVP-события", "Kafka")
+Rel(monolith, recommendationSystem, "Персональные подборки", "Async API")
+
+@enduml
