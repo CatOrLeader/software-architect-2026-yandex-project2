@@ -9,6 +9,8 @@ on:
       - "tests/postman/**"
       - "docker-compose.yml"
       - ".github/workflows/docker-build-push.yml"
+  pull_request:
+    branches: [main]
   release:
     types: [published]
 
@@ -146,7 +148,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event_name == 'release' || github.event_name == 'pull_request' }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6
